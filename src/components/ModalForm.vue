@@ -4,13 +4,17 @@
                         <p class="modal-card-title" style="text-align:center">位置情報設定</p>
                     </header>
                     <section class="modal-card-body">
+                        <input class="test" style="width:80%"></input>
                         <b-field label="住所検索" :message="addressBox.inFocus?'地域名をキーワードに住所を取得できます':''">
                             <div>
+                                
+                    <div class="control addresses has-icons-left is-clearfix"><input type="text" autocomplete="off" placeholder="住所入力" class="input test" v-model="addressBox.value" @focus="doForcus(addressBox,true)"  > <span class="icon is-left"><i class="mdi mdi-magnify mdi-24px"></i></span> </div>
+                                <!--
                             <b-input
-                                placeholder="住所入力"
+                                class="addresses" placeholder="住所入力"
                                      icon="magnify" v-model="addressBox.value" @focus="doForcus(addressBox,true)" @blur="doForcus(addressBox,false)" >
-                            </b-input>
-                            <button class="button is-primary is-small">検索</button>
+                            </b-input>-->
+                            <button class="button is-primary is-small" @click="getGeocodeFromAddress(addressBox.value)">検索</button>
                             </div>
                         </b-field>
 
@@ -20,10 +24,8 @@
                                  >
                             <div>
                             <b-input
-                                placeholder="緯度経度" @input="checkLatLngValidator" @focus="doForcus(latlongBox,true)" @blur="doForcus(latlongBox,false,$event)" v-model="latlongBox.value" icon="map-marker-radius">
-                                
+                                placeholder="緯度経度" v-model="latlongBox.value" icon="map-marker-radius" disabled class="latlng">
                             </b-input>
-                            <button class="button is-primary is-small" :disabled="!latlongBox.correct">入力反映</button>
                             </div>
                         </b-field>
                         
@@ -40,7 +42,7 @@
 </template>
 
 <script>
-    
+const loadGoogleMapsApi = require('load-google-maps-api')
 export default {
   name: 'ModalForm',
   props: {
@@ -48,9 +50,17 @@ export default {
     data:function(){
         return {
             hasGeolocation:("geolocation" in navigator),
-            latlong:{
-                lat:'',
-                lng:''
+            mapObj:{
+                mapElm:{},
+                autocomplete:{},
+                latlng:{
+                    //本州デフォルトセッティング
+                    lat:37.8629704,
+                    lng:136.4834582
+                },
+                zoom:6,
+                geocode:[],
+                map:{}
             },
             addressBox:{
                 value:'',
@@ -63,9 +73,6 @@ export default {
             },
             map:{},
             targetMapElem:{},
-            googleMapsClient:require('@google/maps').createClient({
-              key: 'AIzaSyApvOihEARIgFwXudP7i6IM2oob9QryW7g'
-            })
         }
     },
     computed:{
@@ -88,7 +95,64 @@ export default {
             return obj
         }
     },
+    watch:{
+        'mapObj.latlng':{
+            handler: function (val, oldVal) {
+              //console.log(val)
+             this.latlongBox.value = this.makeLatlongLine();
+                const map = this.mapObj.map;
+                if(map.center){
+                    if(map.getCenter().lat() != val.lat || map.getCenter().lng() != val.ong){
+                        map.setCenter(val);
+                    }
+                }
+            },
+            deep: true
+        },
+        geocode:function(newer,older){
+            console.log(newer);
+        }
+    },
     methods:{
+        initGoogleMaps:function(){
+            const self = this;
+            loadGoogleMapsApi({
+                key: 'AIzaSyApvOihEARIgFwXudP7i6IM2oob9QryW7g',
+                language:'ja',
+                libraries:['places']
+            }).then(function (googleMaps) {
+                self.googleMaps = googleMaps;
+                self.initMap();
+                self.initAutocomplete();
+            }).catch(function (error) {
+              console.error(error)
+            })
+            //初期データの設定
+        },
+        initMap:function(){
+              this.mapObj.map =  new this.googleMaps.Map(this.mapObj.mapElm, {
+            center: this.mapObj.latlng,
+            zoom: this.mapObj.zoom,
+                  fullscreenControl:false,
+                  mapTypeControl:false,
+                  streetViewControl:false
+          });
+        },
+        initAutocomplete:function(){
+                //対応させるテキストボックス
+                let input = document.querySelector('.addresses .input');
+                //プレイスを検索する領域
+                let LatLngFrom = this.googleMaps.LatLng(35.692195,139.7576653);
+                let LatLngTo   = this.googleMaps.LatLng(35.696157,139.7525771);
+                let bounds = this.googleMaps.LatLngBounds(LatLngFrom, LatLngTo);
+              //オートコンプリートのオプション
+                let options = {
+                    types: ['geocode'],                      // 検索タイプ
+                    bounds: bounds,                            // 範囲優先検索
+                    componentRestrictions: {country: 'jp'}     // 日本国内の住所のみ
+                };
+                this.mapObj.autocomplete = new this.googleMaps.places.Autocomplete( input, options);
+        },
         //UIctrl
         UIctrl:function(){
             const self = this;
@@ -125,38 +189,36 @@ export default {
             }
                 return mutched;
         },
-        initMap:function(){
-              this.map = new google.maps.Map(this.targetMapElem, {
-              center: {lat: -34.397, lng: 150.644},
-              zoom: 8
-            });
-        },
         makeLatlongLine:function(){
-            let geoline = `${this.latlong.lat},${this.latlong.lng}`;
+            let geoline = `${this.mapObj.latlng.lat},${this.mapObj.latlng.lng}`;
             if(geoline.length<3){
                 return '';
             }
             return geoline;
         },
-        geocodeTest:function(keyword){
+        getGeocodeFromAddress:function(keyword){
+            const self = this;
             this.googleMapsClient.geocode({
                   address: keyword
                 }, function(err, response) {
                   if (!err) {
-                    console.log(response.json.results);
+                    self.geocode = response.json.results;
                   }
                 });
+        },
+        placeSearch:function(){
+            
         }
     },
     created: function(){
+    this.latlongBox.value = this.makeLatlongLine();
     },
     mounted: function(){
         const self = this;
         if(this.hasGeolocation){
             navigator.geolocation.getCurrentPosition(function(position) {
-                self.latlong.lat = position.coords.latitude;
-                self.latlong.lng = position.coords.longitude;
-                self.latlongBox.value = self.makeLatlongLine();
+                self.mapObj.latlng.lat = position.coords.latitude;
+                self.mapObj.latlng.lng = position.coords.longitude;
                 self.UIctrl().toast('現在地で初期化されました','is-info');
             },function(err){
             self.UIctrl().toast('GPS情報は取得できませんでした','is-info');
@@ -164,14 +226,25 @@ export default {
         }else{
             this.UIctrl().toast('この端末でのGPS情報は取得できません','is-warning');
         }
-        
-        this.targetMapElem = document.getElementById('map');
+        document.querySelector('.modal .animation-content').style.maxWidth = '80vw';
+        this.mapObj.mapElm = document.getElementById('map');
+        this.initGoogleMaps();
     }
     
 }
 </script>
-<style lang="scss" scoped>
+<style lang="scss">
+    .modal-card{
+            max-width: 80vw !important;
+            min-width: 80vw !important;
+            width: 80vw;
+        }
       #map{
-        height: 100%;
+        height: 50vh;
+    }
+    .latlng .input[disabled]{
+        background-color: white;
+        border-color: #dbdbdb;
+        box-shadow: inset 0 1px 2px rgba(10, 10, 10, 0.1);
     }
 </style>
