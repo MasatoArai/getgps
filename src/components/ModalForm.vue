@@ -52,14 +52,15 @@ export default {
             hasGeolocation:("geolocation" in navigator),
             mapObj:{
                 mapElm:{},
-                autocomplete:{},
                 latlng:{
                     //本州デフォルトセッティング
                     lat:37.8629704,
                     lng:136.4834582
                 },
                 zoom:6,
-                geocode:[],
+                //api
+                autocomplete:{},
+                geocoder:{},
                 map:{}
             },
             addressBox:{
@@ -71,7 +72,7 @@ export default {
                 inFocus:false,
                 correct:true
             },
-            map:{},
+            googleMaps:{},
             targetMapElem:{},
         }
     },
@@ -108,9 +109,6 @@ export default {
                 }
             },
             deep: true
-        },
-        geocode:function(newer,older){
-            console.log(newer);
         }
     },
     methods:{
@@ -123,13 +121,15 @@ export default {
             }).then(function (googleMaps) {
                 self.googleMaps = googleMaps;
                 self.initMap();
-                self.initAutocomplete();
+                self.initGeocorder();
+                //self.initAutocomplete();
             }).catch(function (error) {
               console.error(error)
             })
             //初期データの設定
         },
         initMap:function(){
+            const self = this;
               this.mapObj.map =  new this.googleMaps.Map(this.mapObj.mapElm, {
             center: this.mapObj.latlng,
             zoom: this.mapObj.zoom,
@@ -137,6 +137,13 @@ export default {
                   mapTypeControl:false,
                   streetViewControl:false
           });
+            this.mapObj.map.addListener("click", self.clickMap(e));
+        },
+        clickMap:function(e){
+            console.log(e);
+        },
+        initGeocorder:function(){
+            this.mapObj.geocoder = new this.googleMaps.Geocoder();
         },
         initAutocomplete:function(){
                 //対応させるテキストボックス
@@ -198,13 +205,55 @@ export default {
         },
         getGeocodeFromAddress:function(keyword){
             const self = this;
-            this.googleMapsClient.geocode({
+            this.mapObj.geocoder.geocode({
                   address: keyword
-                }, function(err, response) {
-                  if (!err) {
-                    self.geocode = response.json.results;
-                  }
-                });
+  }, function(results, status) {
+    if (status == self.googleMaps.GeocoderStatus.OK) {
+
+      // 結果の表示範囲。結果が１つとは限らないので、LatLngBoundsで用意。
+      let bounds = new self.googleMaps.LatLngBounds();
+      let map = self.mapObj.map;
+      for (let i in results) {
+        if (results[i].geometry) {
+
+          // 緯度経度を取得
+          let latlng = results[i].geometry.location;
+
+          // 住所を取得(日本の場合だけ「日本, 」を削除)
+          let address = results[0].formatted_address.replace(/^日本, /, '');
+
+          // 検索結果地が含まれるように範囲を拡大
+          bounds.extend(latlng);
+
+          // あとはご自由に・・・。
+          new google.maps.InfoWindow({
+            content: address + "<br>(Lat, Lng) = " + latlng.toString()
+          }).open(map, new google.maps.Marker({
+            position: latlng,
+            map: map
+          }));
+        }
+      }
+
+      // 範囲を移動
+      map.fitBounds(bounds);
+
+    } else if (status == google.maps.GeocoderStatus.ERROR) {
+      alert("サーバとの通信時に何らかのエラーが発生！");
+    } else if (status == google.maps.GeocoderStatus.INVALID_REQUEST) {
+      alert("リクエストに問題アリ！geocode()に渡すGeocoderRequestを確認せよ！！");
+    } else if (status == google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
+      alert("短時間にクエリを送りすぎ！落ち着いて！！");
+    } else if (status == google.maps.GeocoderStatus.REQUEST_DENIED) {
+      alert("このページではジオコーダの利用が許可されていない！・・・なぜ！？");
+    } else if (status == google.maps.GeocoderStatus.UNKNOWN_ERROR) {
+      alert("サーバ側でなんらかのトラブルが発生した模様。再挑戦されたし。");
+    } else if (status == google.maps.GeocoderStatus.ZERO_RESULTS) {
+      alert("見つかりません");
+    } else {
+      alert("えぇ～っと・・、バージョンアップ？");
+    }
+  });
         },
         placeSearch:function(){
             
