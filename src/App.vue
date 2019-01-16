@@ -1,12 +1,16 @@
 <template>
     <section>
-        <button class="button is-primary is-medium"
-            @click="isComponentModalActive = true">
-            Launch component modal
-        </button>
+        
+                            <b-input
+                                placeholder="現場住所入力" id="addAddress" @focus="modalOpen">
+                            </b-input>
+        
+                            <b-input
+                                placeholder="経度緯度入力" id="addLatlng" @focus="modalOpen">
+                            </b-input>
 
         <b-modal :active.sync="isComponentModalActive" has-modal-card>
-            <modal-form v-bind="formProps"></modal-form>
+            <modal-form ></modal-form>
         </b-modal>
     </section>
 </template>
@@ -20,11 +24,17 @@ import ModalForm from './components/ModalForm.vue'
         },
         data() {
             return {
-                isComponentModalActive: false,
-                formProps: {
-                    email: 'evan@you.com',
-                    password: 'testing'
-                }
+                isComponentModalActive: false
+            }
+        },
+        methods:{
+            modalOpen(){
+                this.$modal.open({
+                    parent:this,
+                    component:ModalForm,
+                    hasModalCard:true,
+                    canCancel:['escape']
+                })
             }
         }
     }
